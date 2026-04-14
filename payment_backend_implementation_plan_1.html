@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Async Payment Backend — Implementation Plan</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9f9f7; color: #1a1a18; padding: 2rem 1rem; }
+  .container { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 20px; }
+  .summary { display: flex; gap: 12px; margin-bottom: 20px; }
+  .stat-card { flex: 1; background: #f1efe8; border-radius: 10px; padding: 12px; text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 500; color: #1a1a18; }
+  .stat-label { font-size: 11px; color: #888; margin-top: 2px; }
+  .phase { border: 0.5px solid #e0ddd4; border-radius: 12px; margin-bottom: 12px; overflow: hidden; background: #fff; }
+  .phase-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; cursor: pointer; user-select: none; }
+  .phase-header:hover { background: #f9f9f7; }
+  .phase-left { display: flex; align-items: center; gap: 12px; }
+  .phase-badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 6px; white-space: nowrap; }
+  .phase-title { font-size: 14px; font-weight: 500; }
+  .phase-meta { font-size: 12px; color: #888; }
+  .phase-progress { font-size: 12px; color: #888; display: flex; align-items: center; gap: 8px; }
+  .progress-bar-wrap { width: 72px; height: 4px; background: #e8e6de; border-radius: 2px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .chevron { font-size: 11px; color: #aaa; transition: transform 0.2s; margin-left: 6px; }
+  .chevron.open { transform: rotate(180deg); }
+  .phase-body { display: none; border-top: 0.5px solid #e8e6de; }
+  .phase-body.open { display: block; }
+  .step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; border-bottom: 0.5px solid #f0ede6; cursor: pointer; }
+  .step:last-child { border-bottom: none; }
+  .step:hover { background: #f9f9f7; }
+  .checkbox { width: 16px; height: 16px; border: 1.5px solid #ccc; border-radius: 4px; flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .checkbox.checked { background: #1D9E75; border-color: #1D9E75; }
+  .check-mark { color: white; font-size: 10px; display: none; }
+  .checkbox.checked .check-mark { display: block; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 13px; color: #1a1a18; line-height: 1.5; }
+  .step-title.done { color: #aaa; text-decoration: line-through; }
+  .step-tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 6px; margin-top: 4px; font-weight: 500; }
+  .tag-build { background: #E6F1FB; color: #0C447C; }
+  .tag-ai { background: #EEEDFE; color: #3C3489; }
+  .tag-checkpoint { background: #EAF3DE; color: #27500A; }
+  .legend { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Async Payment Backend — Implementation Plan</h1>
+  <p class="subtitle">Check off steps as you complete them. Progress is saved in your browser.</p>
+
+  <div class="summary">
+    <div class="stat-card"><div class="stat-num" id="total-done">0</div><div class="stat-label">steps done</div></div>
+    <div class="stat-card"><div class="stat-num" id="total-steps">0</div><div class="stat-label">total steps</div></div>
+    <div class="stat-card"><div class="stat-num" id="total-pct">0%</div><div class="stat-label">complete</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#378ADD"></div> build yourself</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#7F77DD"></div> use AI</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#639922"></div> checkpoint</div>
+  </div>
+
+  <div id="phases"></div>
+</div>
+
+<script>
+const phases = [
+  {
+    id: 1, title: "Phase 1 — Project foundation", weeks: "Week 1–2",
+    color: { badge: "#E6F1FB", text: "#0C447C", bar: "#378ADD" },
+    steps: [
+      { title: "Install Python 3.11+, create a virtual environment, install FastAPI + Uvicorn", tag: "build" },
+      { title: "Scaffold project folders: /app, /tests, /workers, /db", tag: "build" },
+      { title: "Run a Hello World FastAPI server locally on port 8000", tag: "checkpoint" },
+      { title: "Write docker-compose.yml to spin up PostgreSQL locally", tag: "ai" },
+      { title: "Connect FastAPI to Postgres using SQLAlchemy async engine", tag: "build" },
+      { title: "Create payments table: id, sender, receiver, amount, status, idempotency_key, created_at", tag: "build" },
+      { title: "Run Alembic migration to create the table in the DB", tag: "build" },
+      { title: "Implement POST /payments — accept body, write PENDING row, return job_id", tag: "build" },
+      { title: "Implement GET /payments/{job_id} — return status from DB", tag: "build" },
+      { title: "Manually test both endpoints with curl or Postman", tag: "checkpoint" },
+    ]
+  },
+  {
+    id: 2, title: "Phase 2 — The queue", weeks: "Week 2–3",
+    color: { badge: "#EEEDFE", text: "#3C3489", bar: "#7F77DD" },
+    steps: [
+      { title: "Add Redis to docker-compose.yml alongside Postgres", tag: "ai" },
+      { title: "Install RQ (Redis Queue) and connect it to your Redis instance", tag: "build" },
+      { title: "Move payment processing logic out of the endpoint into a separate worker function", tag: "build" },
+      { title: "Enqueue the worker function from POST /payments instead of processing inline", tag: "build" },
+      { title: "Write the worker: deduct sender balance, credit receiver, update status to DONE", tag: "build" },
+      { title: "Run the RQ worker process separately (rq worker) and watch it process jobs", tag: "checkpoint" },
+      { title: "Add a balances table and seed two test accounts with starting balances", tag: "build" },
+      { title: "Implement idempotency: if same idempotency_key received twice, return existing job without re-enqueuing", tag: "build" },
+      { title: "Verify idempotency manually: submit same payload twice, confirm only one DB row created", tag: "checkpoint" },
+    ]
+  },
+  {
+    id: 3, title: "Phase 3 — Failure handling", weeks: "Week 3–4",
+    color: { badge: "#FAECE7", text: "#712B13", bar: "#D85A30" },
+    steps: [
+      { title: "Add a failed_reason column to the payments table via new Alembic migration", tag: "build" },
+      { title: "Handle insufficient funds: check balance before processing, update status to FAILED with reason", tag: "build" },
+      { title: "Add retry logic in the worker: on transient error, re-enqueue up to 3 times with exponential backoff", tag: "build" },
+      { title: "Add attempt_count column to track retries", tag: "build" },
+      { title: "Create a dead-letter queue: after 3 failed attempts, move job to a separate RQ failed queue", tag: "build" },
+      { title: "Implement GET /payments/{job_id} to surface FAILED status and reason in response", tag: "build" },
+      { title: "Simulate a worker crash mid-job by killing the process — verify job retries on restart", tag: "checkpoint" },
+      { title: "Test all three failure paths: insufficient funds, transient error, duplicate submission", tag: "checkpoint" },
+    ]
+  },
+  {
+    id: 4, title: "Phase 4 — Test suite", weeks: "Week 4–5",
+    color: { badge: "#EAF3DE", text: "#27500A", bar: "#639922" },
+    steps: [
+      { title: "Install pytest, pytest-asyncio, httpx for async test client", tag: "ai" },
+      { title: "Write a conftest.py that spins up a test DB and tears it down after each test", tag: "build" },
+      { title: "Write unit tests for balance deduction logic — test exact amounts, edge cases, zero balance", tag: "build" },
+      { title: "Write unit tests for idempotency key — same key twice returns same job_id, no duplicate row", tag: "build" },
+      { title: "Write integration test: POST /payments → assert DB row created with PENDING status", tag: "build" },
+      { title: "Write integration test: process job → assert status updates to DONE, balances updated correctly", tag: "build" },
+      { title: "Write integration test: insufficient funds → assert status FAILED with correct reason string", tag: "build" },
+      { title: "Write integration test: 3 retries exhausted → assert job lands in dead-letter queue", tag: "build" },
+      { title: "Run pytest --cov and hit 85%+ coverage", tag: "checkpoint" },
+    ]
+  },
+  {
+    id: 5, title: "Phase 5 — CI/CD + observability", weeks: "Week 5–6",
+    color: { badge: "#FAEEDA", text: "#633806", bar: "#BA7517" },
+    steps: [
+      { title: "Create .github/workflows/ci.yml — run lint (ruff) + pytest on every push to main", tag: "ai" },
+      { title: "Add a Dockerfile for the FastAPI app — multi-stage build, non-root user", tag: "ai" },
+      { title: "Make sure docker-compose.yml builds and runs the full stack locally in one command", tag: "checkpoint" },
+      { title: "Install prometheus-fastapi-instrumentator and expose /metrics endpoint", tag: "build" },
+      { title: "Add custom Prometheus counters: jobs_submitted_total, jobs_failed_total", tag: "build" },
+      { title: "Add a Prometheus histogram: job_processing_duration_seconds", tag: "build" },
+      { title: "Add Prometheus + Grafana to docker-compose.yml", tag: "ai" },
+      { title: "Build Grafana dashboard: 3 panels — throughput, failure rate, processing latency", tag: "build" },
+      { title: "Push a commit, watch CI pass green, open Grafana, submit a payment, confirm metrics update", tag: "checkpoint" },
+    ]
+  },
+  {
+    id: 6, title: "Phase 6 — README", weeks: "2 days",
+    color: { badge: "#F1EFE8", text: "#444441", bar: "#888780" },
+    steps: [
+      { title: "Write the problem statement: one paragraph, what this system does and why it matters", tag: "build" },
+      { title: "Draw an architecture diagram in Excalidraw: API → Queue → Worker → DB, with failure paths", tag: "build" },
+      { title: "Write the local setup section: docker-compose up should be step 1, app running by step 3", tag: "build" },
+      { title: "Write the 'failure scenarios' section: document each failure path and how the system recovers", tag: "build" },
+      { title: "Add a tech stack table and link to relevant docs", tag: "build" },
+      { title: "Push final README, do a clean clone test — verify it runs from scratch with no prior context", tag: "checkpoint" },
+    ]
+  }
+];
+
+const saved = JSON.parse(localStorage.getItem('payment_plan') || '{}');
+function save() { localStorage.setItem('payment_plan', JSON.stringify(saved)); }
+
+function updateSummary() {
+  let done = 0, total = 0;
+  phases.forEach(p => p.steps.forEach((s, i) => { total++; if (saved[`${p.id}-${i}`]) done++; }));
+  document.getElementById('total-done').textContent = done;
+  document.getElementById('total-steps').textContent = total;
+  document.getElementById('total-pct').textContent = Math.round(done / total * 100) + '%';
+}
+
+function updatePhaseProgress(phaseId) {
+  const phase = phases.find(p => p.id === phaseId);
+  let done = 0;
+  phase.steps.forEach((s, i) => { if (saved[`${phaseId}-${i}`]) done++; });
+  const pct = Math.round(done / phase.steps.length * 100);
+  const fill = document.getElementById(`fill-${phaseId}`);
+  const prog = document.getElementById(`prog-${phaseId}`);
+  if (fill) fill.style.width = pct + '%';
+  if (prog) prog.textContent = done + '/' + phase.steps.length;
+}
+
+const container = document.getElementById('phases');
+phases.forEach(phase => {
+  const el = document.createElement('div');
+  el.className = 'phase';
+  const stepsHtml = phase.steps.map((step, i) => {
+    const key = `${phase.id}-${i}`;
+    const checked = saved[key] ? 'checked' : '';
+    const tagClass = step.tag === 'build' ? 'tag-build' : step.tag === 'ai' ? 'tag-ai' : 'tag-checkpoint';
+    const tagLabel = step.tag === 'build' ? 'build yourself' : step.tag === 'ai' ? 'use AI' : 'checkpoint';
+    return `<div class="step" onclick="toggleStep(${phase.id}, ${i})">
+      <div class="checkbox ${checked}" id="cb-${phase.id}-${i}"><span class="check-mark">✓</span></div>
+      <div class="step-content">
+        <div class="step-title ${checked ? 'done' : ''}" id="st-${phase.id}-${i}">${step.title}</div>
+        <span class="step-tag ${tagClass}">${tagLabel}</span>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="phase-header" onclick="togglePhase(${phase.id})">
+      <div class="phase-left">
+        <span class="phase-badge" style="background:${phase.color.badge};color:${phase.color.text}">${phase.weeks}</span>
+        <div>
+          <div class="phase-title">${phase.title}</div>
+          <div class="phase-meta">${phase.steps.length} steps</div>
+        </div>
+      </div>
+      <div class="phase-progress">
+        <span id="prog-${phase.id}">0/${phase.steps.length}</span>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="fill-${phase.id}" style="width:0%;background:${phase.color.bar}"></div></div>
+        <span class="chevron" id="chev-${phase.id}">▼</span>
+      </div>
+    </div>
+    <div class="phase-body" id="body-${phase.id}">${stepsHtml}</div>`;
+  container.appendChild(el);
+  updatePhaseProgress(phase.id);
+});
+updateSummary();
+
+window.togglePhase = function(id) {
+  document.getElementById(`body-${id}`).classList.toggle('open');
+  document.getElementById(`chev-${id}`).classList.toggle('open');
+};
+window.toggleStep = function(phaseId, stepIdx) {
+  const key = `${phaseId}-${stepIdx}`;
+  saved[key] = !saved[key];
+  save();
+  document.getElementById(`cb-${phaseId}-${stepIdx}`).classList.toggle('checked', saved[key]);
+  document.getElementById(`st-${phaseId}-${stepIdx}`).classList.toggle('done', saved[key]);
+  updatePhaseProgress(phaseId);
+  updateSummary();
+};
+</script>
+</body>
+</html>

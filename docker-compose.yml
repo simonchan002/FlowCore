@@ -1,0 +1,45 @@
+
+services:
+
+# api
+  api:
+    build: ./api
+    container_name: api
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - REDIS_HOST=redis
+      - RABBITMQ_HOST=rabbitmq
+    restart: always
+
+# redis
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s   # How often to run the test
+      timeout: 10s    # How long to wait for a response
+      retries: 5      # How many failures before marking as "unhealthy"
+
+  
+# rabbitmq
+  rabbitmq:
+    image: rabbitmq:latest
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q" ,"check_running"]
+      interval: 30s   # How often to run the test
+      timeout: 10s    # How long to wait for a response
+      retries: 5      # How many failures before marking as "unhealthy"
+
